@@ -119,6 +119,7 @@ export const configureAndListen = async (
 
   await fastify.listen({
     port,
+    host: '0.0.0.0',
   });
 };
 
