@@ -21,6 +21,7 @@ export const configureAndListen = async (
   });
 
   fastify.post<{
+    Querystring: { format: string };
     Body: { token: string };
   }>(
     '/exchange',
@@ -112,6 +113,20 @@ export const configureAndListen = async (
           Object.keys(secretsToSend),
         )}`,
       );
+
+      if (req.query.format === 'shell') {
+        for (const secretKey of Object.keys(secretsToSend)) {
+          if (!/^[A-Za-z][A-Za-z0-9]+$/i.test(secretKey)) {
+            req.log.error(
+              `Shell format was requested but the "${secretKey}" key is not compatible with shell variable naming`,
+            );
+            return reply.status(422).send('');
+          }
+        }
+        return Object.keys(secretsToSend)
+          .map((secretKey) => `export ${secretKey}=${JSON.stringify(secretsToSend[secretKey])}`)
+          .join('\n');
+      }
 
       return secretsToSend;
     },
