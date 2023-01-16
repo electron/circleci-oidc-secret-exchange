@@ -116,7 +116,7 @@ export const configureAndListen = async (
 
       if (req.query.format === 'shell') {
         for (const secretKey of Object.keys(secretsToSend)) {
-          if (!/^[A-Za-z][A-Za-z0-9]+$/i.test(secretKey)) {
+          if (!/^[A-Za-z][A-Za-z0-9_]+$/i.test(secretKey)) {
             req.log.error(
               `Shell format was requested but the "${secretKey}" key is not compatible with shell variable naming`,
             );
