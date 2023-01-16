@@ -22,17 +22,13 @@ jobs:
 workflows:
   version: 2
   test_and_release:
-    # Run the test jobs first, then the release only when all the test jobs are successful
     jobs:
       - test
-      # - cfa/release:
-      #     requires:
-      #       - test-linux-12
-      #       - test-linux-14
-      #       - test-mac
-      #       - test-windows
-      #     filters:
-      #       branches:
-      #         only:
-      #           - main
-      #     context: cfa-release
+      - cfa/release:
+          requires:
+            - test
+          filters:
+            branches:
+              only:
+                - main
+          context: cfa-release
