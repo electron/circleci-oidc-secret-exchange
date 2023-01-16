@@ -43,7 +43,7 @@ export const configureAndListen = async (
       for (const configuration of config) {
         validatedClaims = await getValidatedToken(
           token,
-          `https://oidc.circleci.com/org/fbdaa81e-9fcd-4b31-9f5d-11feaa8ef52d${configuration.organizationId}`,
+          `https://oidc.circleci.com/org/${configuration.organizationId}`,
         );
         if (validatedClaims) {
           req.log.info(`Validated incoming OIDC token from: ${validatedClaims.sub}`);
@@ -56,7 +56,7 @@ export const configureAndListen = async (
         req.log.warn(
           'Failed to validing incoming OIDC token, did not match any configured organization',
         );
-        return reply.code(401);
+        return reply.code(401).send();
       }
 
       // Do a quick-pass to filter down secret providers based on contextId and projectId claims
