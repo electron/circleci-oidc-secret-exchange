@@ -43,13 +43,36 @@ OIDC token must be issued for an allowed project **and** an allowed context.  No
 
 We have a few built-in secret providers documented below, you can build your own provider by importing and implementing the base `SecretProvider` class.
 
+### Generic Secret Provider
+
+This provider allows you to load secrets from _anywhere_ and hand them back in key<>value form.
+
+```typescript
+import { GenericSecretProvider } from '@electron/circleci-oidc-secret-exchange';
+
+export const config = [
+  {
+    organizationId: 'foo',
+    secrets: [
+      provider: () => new GenericSecretProvider(
+        async () => ({
+          MY_COOL_SECRET: process.env.MY_COOL_SECRET,
+          OTHER_SECRET: await getFromSomewhere(),
+        })
+      ),
+      filters: { ... },
+    ]
+  }
+]
+```
+
 ### File Secret Provider
 
 This provider loads a JSON file from disk and let's you read and provide secrets from it.  The file is read fresh on every request
 so if you change the file on disk even without restarting the service the updated secrets will be read
 
 ```typescript
-import { GitHubAppTokenProvider } from '@electron/circleci-oidc-secret-exchange';
+import { FileSecretProvider } from '@electron/circleci-oidc-secret-exchange';
 
 export const config = [
   {

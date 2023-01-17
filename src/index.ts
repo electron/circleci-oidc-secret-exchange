@@ -2,6 +2,7 @@ import Fastify from 'fastify';
 import { OIDCSecretExchangeConfig, OIDCSecretExchangeConfiguration } from './config';
 import { getValidatedToken } from './oidc/validate-token';
 import { FileSecretProvider } from './providers/FileProvider';
+import { GenericSecretProvider } from './providers/GenericProvider';
 import { GitHubAppTokenProvider } from './providers/GitHubAppProvider';
 import { SecretProvider } from './SecretProvider';
 import { CircleCIOIDCClaims } from './type';
@@ -138,4 +139,4 @@ export const configureAndListen = async (
   });
 };
 
-export { FileSecretProvider, GitHubAppTokenProvider, SecretProvider };
+export { FileSecretProvider, GenericSecretProvider, GitHubAppTokenProvider, SecretProvider };
