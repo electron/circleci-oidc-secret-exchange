@@ -26,7 +26,7 @@ export const configureAndListen = async (
     Body: { token: string };
   }>('/exchange', async (req, reply) => {
     req.log.info('Received secret exchange request');
-    let { token } = req.body;
+    let token = req.body?.token;
     if (!token) {
       token = req.headers['x-oidc-token'] as string;
     }
