@@ -30,6 +30,7 @@ export const configureAndListen = async (
       schema: {
         body: {
           type: 'object',
+          required: [],
           properties: {
             token: { type: 'string' },
           },
@@ -38,7 +39,14 @@ export const configureAndListen = async (
     },
     async (req, reply) => {
       req.log.info('Received secret exchange request');
-      const { token } = req.body;
+      let { token } = req.body;
+      if (!token) {
+        token = req.headers['x-oidc-token'] as string;
+      }
+
+      if (!token) {
+        return reply.code(400).send('Missing token');
+      }
 
       let validatedClaims: CircleCIOIDCClaims | null = null;
       let secretProviders: OIDCSecretExchangeConfiguration<unknown>[] | null = null;
