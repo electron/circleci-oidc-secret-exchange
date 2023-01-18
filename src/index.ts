@@ -24,122 +24,108 @@ export const configureAndListen = async (
   fastify.post<{
     Querystring: { format: string };
     Body: { token: string };
-  }>(
-    '/exchange',
-    {
-      schema: {
-        body: {
-          type: 'object',
-          required: [],
-          properties: {
-            token: { type: 'string' },
-          },
-        },
-      },
-    },
-    async (req, reply) => {
-      req.log.info('Received secret exchange request');
-      let { token } = req.body;
-      if (!token) {
-        token = req.headers['x-oidc-token'] as string;
-      }
+  }>('/exchange', async (req, reply) => {
+    req.log.info('Received secret exchange request');
+    let { token } = req.body;
+    if (!token) {
+      token = req.headers['x-oidc-token'] as string;
+    }
 
-      if (!token) {
-        return reply.code(400).send('Missing token');
-      }
+    if (!token || typeof token !== 'string') {
+      return reply.code(400).send('Missing token');
+    }
 
-      let validatedClaims: CircleCIOIDCClaims | null = null;
-      let secretProviders: OIDCSecretExchangeConfiguration<unknown>[] | null = null;
-      for (const configuration of config) {
-        validatedClaims = await getValidatedToken(
-          token,
-          `https://oidc.circleci.com/org/${configuration.organizationId}`,
-        );
-        if (validatedClaims) {
-          req.log.info(`Validated incoming OIDC token from: ${validatedClaims.sub}`);
-          secretProviders = configuration.secrets;
-          break;
+    let validatedClaims: CircleCIOIDCClaims | null = null;
+    let secretProviders: OIDCSecretExchangeConfiguration<unknown>[] | null = null;
+    for (const configuration of config) {
+      validatedClaims = await getValidatedToken(
+        token,
+        `https://oidc.circleci.com/org/${configuration.organizationId}`,
+      );
+      if (validatedClaims) {
+        req.log.info(`Validated incoming OIDC token from: ${validatedClaims.sub}`);
+        secretProviders = configuration.secrets;
+        break;
+      }
+    }
+
+    if (!validatedClaims || !secretProviders) {
+      req.log.warn(
+        'Failed to validing incoming OIDC token, did not match any configured organization',
+      );
+      return reply.code(401).send();
+    }
+
+    // Do a quick-pass to filter down secret providers based on contextId and projectId claims
+    const projectId = validatedClaims['oidc.circleci.com/project-id'];
+    // It is currently specified by CircleCI that this token will only ever have a single context ID
+    // Ref: https://circleci.com/docs/openid-connect-tokens/#format-of-the-openid-connect-id-token
+    const contextId = validatedClaims['oidc.circleci.com/context-ids'][0];
+    const filteredSecretProviders = secretProviders.filter((provider) => {
+      if (!provider.filters.projectIds.includes(projectId)) return false;
+      if (!provider.filters.contextIds.includes(contextId)) return false;
+      return true;
+    });
+
+    const secretProvidersInitialized = filteredSecretProviders.map((provider) =>
+      provider.provider(projectId, contextId),
+    );
+
+    // Some secret providers need to load content, and some secrets use the same
+    // loaded content.  To reduce work we share loadable content across secret providers
+    const contentToLoad: Record<string, Promise<unknown> | undefined> = {};
+
+    // Get content we need to load and share
+    const loaders: Promise<unknown>[] = [];
+    for (const secretProvider of secretProvidersInitialized) {
+      const key = secretProvider.loadableContentKey();
+      if (contentToLoad[key]) continue;
+
+      const promise = secretProvider.loadContent();
+      contentToLoad[key] = promise;
+      loaders.push(promise);
+    }
+
+    // Wait for all content to load
+    await Promise.all(loaders);
+
+    const secretsToSend: Record<string, string> = {};
+    await Promise.all(
+      secretProvidersInitialized.map(async (provider) => {
+        const key = provider.loadableContentKey();
+        const providedSecrets = await provider.provideSecrets(await contentToLoad[key]);
+        for (const secretKey of Object.keys(providedSecrets)) {
+          if (secretsToSend[secretKey]) {
+            throw new Error(`Two secret providers provided the same secret key: "${secretKey}"`);
+          }
+
+          secretsToSend[secretKey] = providedSecrets[secretKey];
+        }
+      }),
+    );
+
+    req.log.info(
+      `Respond to a secrets exchange request from "${validatedClaims.sub}" with ${JSON.stringify(
+        Object.keys(secretsToSend),
+      )}`,
+    );
+
+    if (req.query.format === 'shell') {
+      for (const secretKey of Object.keys(secretsToSend)) {
+        if (!/^[A-Za-z][A-Za-z0-9_]+$/i.test(secretKey)) {
+          req.log.error(
+            `Shell format was requested but the "${secretKey}" key is not compatible with shell variable naming`,
+          );
+          return reply.status(422).send('');
         }
       }
+      return Object.keys(secretsToSend)
+        .map((secretKey) => `export ${secretKey}=${JSON.stringify(secretsToSend[secretKey])}`)
+        .join('\n');
+    }
 
-      if (!validatedClaims || !secretProviders) {
-        req.log.warn(
-          'Failed to validing incoming OIDC token, did not match any configured organization',
-        );
-        return reply.code(401).send();
-      }
-
-      // Do a quick-pass to filter down secret providers based on contextId and projectId claims
-      const projectId = validatedClaims['oidc.circleci.com/project-id'];
-      // It is currently specified by CircleCI that this token will only ever have a single context ID
-      // Ref: https://circleci.com/docs/openid-connect-tokens/#format-of-the-openid-connect-id-token
-      const contextId = validatedClaims['oidc.circleci.com/context-ids'][0];
-      const filteredSecretProviders = secretProviders.filter((provider) => {
-        if (!provider.filters.projectIds.includes(projectId)) return false;
-        if (!provider.filters.contextIds.includes(contextId)) return false;
-        return true;
-      });
-
-      const secretProvidersInitialized = filteredSecretProviders.map((provider) =>
-        provider.provider(projectId, contextId),
-      );
-
-      // Some secret providers need to load content, and some secrets use the same
-      // loaded content.  To reduce work we share loadable content across secret providers
-      const contentToLoad: Record<string, Promise<unknown> | undefined> = {};
-
-      // Get content we need to load and share
-      const loaders: Promise<unknown>[] = [];
-      for (const secretProvider of secretProvidersInitialized) {
-        const key = secretProvider.loadableContentKey();
-        if (contentToLoad[key]) continue;
-
-        const promise = secretProvider.loadContent();
-        contentToLoad[key] = promise;
-        loaders.push(promise);
-      }
-
-      // Wait for all content to load
-      await Promise.all(loaders);
-
-      const secretsToSend: Record<string, string> = {};
-      await Promise.all(
-        secretProvidersInitialized.map(async (provider) => {
-          const key = provider.loadableContentKey();
-          const providedSecrets = await provider.provideSecrets(await contentToLoad[key]);
-          for (const secretKey of Object.keys(providedSecrets)) {
-            if (secretsToSend[secretKey]) {
-              throw new Error(`Two secret providers provided the same secret key: "${secretKey}"`);
-            }
-
-            secretsToSend[secretKey] = providedSecrets[secretKey];
-          }
-        }),
-      );
-
-      req.log.info(
-        `Respond to a secrets exchange request from "${validatedClaims.sub}" with ${JSON.stringify(
-          Object.keys(secretsToSend),
-        )}`,
-      );
-
-      if (req.query.format === 'shell') {
-        for (const secretKey of Object.keys(secretsToSend)) {
-          if (!/^[A-Za-z][A-Za-z0-9_]+$/i.test(secretKey)) {
-            req.log.error(
-              `Shell format was requested but the "${secretKey}" key is not compatible with shell variable naming`,
-            );
-            return reply.status(422).send('');
-          }
-        }
-        return Object.keys(secretsToSend)
-          .map((secretKey) => `export ${secretKey}=${JSON.stringify(secretsToSend[secretKey])}`)
-          .join('\n');
-      }
-
-      return secretsToSend;
-    },
-  );
+    return secretsToSend;
+  });
 
   await fastify.listen({
     port,
