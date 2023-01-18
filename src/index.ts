@@ -120,8 +120,8 @@ export const configureAndListen = async (
         }
       }
       return Object.keys(secretsToSend)
-        .map((secretKey) => `export ${secretKey}=${JSON.stringify(secretsToSend[secretKey])}`)
-        .join('\n');
+        .map((secretKey) => `export ${secretKey}=${JSON.stringify(secretsToSend[secretKey])}\n`)
+        .join('');
     }
 
     return secretsToSend;
