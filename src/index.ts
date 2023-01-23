@@ -110,7 +110,7 @@ export const configureAndListen = async (
       )}`,
     );
 
-    if (req.query.format === 'shell') {
+    if (req.query.format === 'shell' || req.query.format === 'powershell') {
       for (const secretKey of Object.keys(secretsToSend)) {
         if (!/^[A-Za-z][A-Za-z0-9_]+$/i.test(secretKey)) {
           req.log.error(
@@ -119,9 +119,16 @@ export const configureAndListen = async (
           return reply.status(422).send('');
         }
       }
-      return Object.keys(secretsToSend)
-        .map((secretKey) => `export ${secretKey}=${JSON.stringify(secretsToSend[secretKey])}\n`)
-        .join('');
+      if (req.query.format === 'shell') {
+        return Object.keys(secretsToSend)
+          .map((secretKey) => `export ${secretKey}=${JSON.stringify(secretsToSend[secretKey])}\n`)
+          .join('');
+      }
+      if (req.query.format === 'powershell') {
+        return Object.keys(secretsToSend)
+          .map((secretKey) => `$env:${secretKey} = ${JSON.stringify(secretsToSend[secretKey])}\n`)
+          .join('');
+      }
     }
 
     return secretsToSend;
