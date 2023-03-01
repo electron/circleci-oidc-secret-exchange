@@ -102,7 +102,7 @@ export const config = [
     secrets: [
       provider: () => new GitHubAppTokenProvider({
         // Creds bundle generated for `@electron/github-app-auth`
-        credString: process.env.MY_GITHUB_APP_CREDS,
+        credsString: process.env.MY_GITHUB_APP_CREDS,
         // The repo to generate this token for, could be any repo
         // not just the repo that generated the OIDC token
         repo: {
