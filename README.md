@@ -93,6 +93,8 @@ export const config = [
 This provider hands off a permission-scoped, repo-scoped GitHub App installation token as a secret.  These tokens last ~60 minutes
 so you if your job takes longer than that the token will no longer be valid.
 
+To generate the credentials bundle for `credsString`, [see the instructions on `electron/github-app-auth`](https://github.com/electron/github-app-auth#generating-credentials).
+
 ```typescript
 import { GitHubAppTokenProvider } from '@electron/circleci-oidc-secret-exchange';
 
