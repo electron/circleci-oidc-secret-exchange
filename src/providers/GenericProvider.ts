@@ -1,7 +1,7 @@
 import { SecretProvider } from '../SecretProvider';
 
 export class GenericSecretProvider extends SecretProvider<null> {
-  constructor(private getSecrets: () => Promise<Record<string, string>>) {
+  constructor(private getSecrets: () => Promise<Record<string, string>> | Record<string, string>) {
     super();
   }
 
