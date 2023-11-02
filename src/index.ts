@@ -63,7 +63,12 @@ export const configureAndListen = async (
     const contextId = validatedClaims['oidc.circleci.com/context-ids'][0];
     const filteredSecretProviders = secretProviders.filter((provider) => {
       if (!provider.filters.projectIds.includes(projectId)) return false;
-      if (!provider.filters.contextIds.includes(contextId)) return false;
+      // If the wildcard context is allowed then we don't need to check the contextIds filter
+      if (!provider.filters.contextIds.includes('*')) {
+        // If the contextId is missing from the claim don't validate it in case consumers
+        // accidentally put `undefined` in the contextIds array
+        if (!contextId || !provider.filters.contextIds.includes(contextId)) return false;
+      }
       return true;
     });
 
