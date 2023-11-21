@@ -1,6 +1,6 @@
 version: 2.1
 orbs:
-  cfa: continuousauth/npm@1.0.2
+  cfa: continuousauth/npm@2.1.0
 jobs:
   test:
     docker:
