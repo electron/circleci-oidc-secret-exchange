@@ -60,7 +60,13 @@ export const configureAndListen = async (
     const projectId = validatedClaims['oidc.circleci.com/project-id'];
     // It is currently specified by CircleCI that this token will only ever have a single context ID
     // Ref: https://circleci.com/docs/openid-connect-tokens/#format-of-the-openid-connect-id-token
-    const contextId = validatedClaims['oidc.circleci.com/context-ids'][0];
+    // Due to a bug however the OIDC token may claim a "null" context-ids array, in that case
+    // we assume 0 contexts to take the least-privilege approach
+    let validatedContextIds = validatedClaims['oidc.circleci.com/context-ids'];
+    if (validatedContextIds === null) {
+      validatedContextIds = [];
+    }
+    const contextId = validatedContextIds[0];
     const filteredSecretProviders = secretProviders.filter((provider) => {
       if (!provider.filters.projectIds.includes(projectId)) return false;
       // If the wildcard context is allowed then we don't need to check the contextIds filter
