@@ -23,7 +23,6 @@
     "openid-client": "^5.3.1"
   },
   "devDependencies": {
-    "@continuous-auth/semantic-release-npm": "^3.0.0",
     "@types/jest": "^29.2.5",
     "@types/jsonwebtoken": "^9.0.1",
     "@types/jwk-to-pem": "^2.0.1",
