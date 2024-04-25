@@ -2,10 +2,12 @@ import got from 'got';
 import { BaseClient, Issuer } from 'openid-client';
 import * as jwkToPem from 'jwk-to-pem';
 import * as jwt from 'jsonwebtoken';
-import { CircleCIOIDCClaims } from '../type';
 import * as path from 'path';
 
-export async function getValidatedToken(token: string, discoveryUrl: string) {
+export async function getValidatedToken<TClaims extends object>(
+  token: string,
+  discoveryUrl: string,
+): Promise<TClaims | null> {
   if (!token) {
     // Token is an empty string, no point even trying
     return null;
@@ -71,5 +73,5 @@ export async function getValidatedToken(token: string, discoveryUrl: string) {
     return null;
   }
 
-  return verifiedClaims.payload as CircleCIOIDCClaims;
+  return verifiedClaims.payload as TClaims;
 }

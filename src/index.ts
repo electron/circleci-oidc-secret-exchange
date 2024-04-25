@@ -1,11 +1,14 @@
 import Fastify from 'fastify';
-import { OIDCSecretExchangeConfig, OIDCSecretExchangeConfiguration } from './config';
-import { getValidatedToken } from './oidc/validate-token';
+import { OIDCSecretExchangeConfig } from './config';
 import { FileSecretProvider } from './providers/FileProvider';
 import { GenericSecretProvider } from './providers/GenericProvider';
 import { GitHubAppTokenProvider } from './providers/GitHubAppProvider';
 import { SecretProvider } from './SecretProvider';
-import { CircleCIOIDCClaims } from './type';
+import {
+  SubjectedSecretProvider,
+  getProvidersForConfig,
+  perPlatformHandlers,
+} from './oidc/handlers';
 
 const DEFAULT_PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 8080;
 
@@ -35,51 +38,41 @@ export const configureAndListen = async (
       return reply.code(400).send('Missing token');
     }
 
-    let validatedClaims: CircleCIOIDCClaims | null = null;
-    let secretProviders: OIDCSecretExchangeConfiguration<unknown>[] | null = null;
+    // let validatedClaims: CircleCIOIDCClaims | null = null;
+    // const chosenConfig: OIDCSecretExchangeConfig[0] | null = null;
+    let filteredSecretProviders: SubjectedSecretProvider | null = null;
     for (const configuration of config) {
-      validatedClaims = await getValidatedToken(
-        token,
-        `https://oidc.circleci.com/org/${configuration.organizationId}`,
-      );
-      if (validatedClaims) {
-        req.log.info(`Validated incoming OIDC token from: ${validatedClaims.sub}`);
-        secretProviders = configuration.secrets;
-        break;
+      switch (configuration.type) {
+        case 'circleci': {
+          filteredSecretProviders = await getProvidersForConfig(
+            req.log,
+            configuration,
+            perPlatformHandlers.circleci,
+            token,
+          );
+          break;
+        }
+        case 'invalid': {
+          filteredSecretProviders = await getProvidersForConfig(
+            req.log,
+            configuration,
+            perPlatformHandlers.invalid,
+            token,
+          );
+          break;
+        }
       }
     }
 
-    if (!validatedClaims || !secretProviders) {
+    if (!filteredSecretProviders) {
       req.log.warn(
         'Failed to validing incoming OIDC token, did not match any configured organization',
       );
       return reply.code(401).send();
     }
 
-    // Do a quick-pass to filter down secret providers based on contextId and projectId claims
-    const projectId = validatedClaims['oidc.circleci.com/project-id'];
-    // It is currently specified by CircleCI that this token will only ever have a single context ID
-    // Ref: https://circleci.com/docs/openid-connect-tokens/#format-of-the-openid-connect-id-token
-    // Due to a bug however the OIDC token may claim a "null" context-ids array, in that case
-    // we assume 0 contexts to take the least-privilege approach
-    let validatedContextIds = validatedClaims['oidc.circleci.com/context-ids'];
-    if (validatedContextIds === null) {
-      validatedContextIds = [];
-    }
-    const contextId = validatedContextIds[0];
-    const filteredSecretProviders = secretProviders.filter((provider) => {
-      if (!provider.filters.projectIds.includes(projectId)) return false;
-      // If the wildcard context is allowed then we don't need to check the contextIds filter
-      if (!provider.filters.contextIds.includes('*')) {
-        // If the contextId is missing from the claim don't validate it in case consumers
-        // accidentally put `undefined` in the contextIds array
-        if (!contextId || !provider.filters.contextIds.includes(contextId)) return false;
-      }
-      return true;
-    });
-
-    const secretProvidersInitialized = filteredSecretProviders.map((provider) =>
-      provider.provider(projectId, contextId),
+    const secretProvidersInitialized = filteredSecretProviders.providers.map((provider) =>
+      provider(),
     );
 
     // Some secret providers need to load content, and some secrets use the same
@@ -116,9 +109,9 @@ export const configureAndListen = async (
     );
 
     req.log.info(
-      `Respond to a secrets exchange request from "${validatedClaims.sub}" with ${JSON.stringify(
-        Object.keys(secretsToSend),
-      )}`,
+      `Respond to a secrets exchange request from "${
+        filteredSecretProviders.subject
+      }" with ${JSON.stringify(Object.keys(secretsToSend))}`,
     );
 
     if (req.query.format === 'shell' || req.query.format === 'powershell') {

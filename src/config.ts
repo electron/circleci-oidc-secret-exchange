@@ -1,16 +1,42 @@
 import { SecretProvider } from './SecretProvider';
 
-// interface ISecretProvider implements SecretProvider {};
-
-export type OIDCSecretExchangeConfiguration<Content> = {
-  provider: (projectId: string, contextId: string) => SecretProvider<Content>;
-  filters: {
-    projectIds: string[];
-    contextIds: string[];
-  };
+export type OIDCSecretExchangeConfiguration<Filters extends object, Content> = {
+  provider: () => SecretProvider<Content>;
+  filters: Filters;
 };
 
-export type OIDCSecretExchangeConfig = {
-  organizationId: string;
-  secrets: OIDCSecretExchangeConfiguration<unknown>[];
-}[];
+type OIDCPlatform<
+  Identifier extends string,
+  TopLevelConfig extends object,
+  ProviderFilters extends object,
+> = {
+  identifier: Identifier;
+  topLevel: TopLevelConfig;
+  filters: ProviderFilters;
+};
+
+export type OIDCSecretExchangeConfigItem<
+  OIDCPlatformConfig extends OIDCPlatform<string, object, object>,
+> = {
+  secrets: OIDCSecretExchangeConfiguration<OIDCPlatformConfig['filters'], unknown>[];
+} & OIDCPlatformConfig['topLevel'] & {
+    type: OIDCPlatformConfig['identifier'];
+  };
+
+export type CircleOIDCPlatform = OIDCPlatform<
+  'circleci',
+  {
+    organizationId: string;
+  },
+  {
+    projectIds: string[];
+    contextIds: string[];
+  }
+>;
+
+export type InvalidOIDCPlatform = OIDCPlatform<'invalid', object, object>;
+
+export type OIDCSecretExchangeConfig = (
+  | OIDCSecretExchangeConfigItem<CircleOIDCPlatform>
+  | OIDCSecretExchangeConfigItem<InvalidOIDCPlatform>
+)[];
