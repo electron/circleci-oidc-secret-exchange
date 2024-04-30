@@ -1,3 +1,7 @@
+export type BaseClaims = {
+  sub: string;
+};
+
 export type CircleCIOIDCClaims = {
   /**
    * The subject. This identifies who is running the CircleCI job and where. Its value is "org/ORGANIZATION_ID/project/PROJECT_ID/user/USER_ID", a string, where ORGANIZATION_ID, PROJECT_ID, and USER_ID are UUIDs that identify the CircleCI organization, project, and user, respectively. The user is the CircleCI user that caused this job to run.
