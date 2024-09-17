@@ -16,3 +16,22 @@ export type CircleCIOIDCClaims = {
    */
   'oidc.circleci.com/context-ids': string[];
 };
+
+export type GitHubActionsOIDCClaims = {
+  /**
+   * The subject, this identifies the repo + org. It's value is "repo:foo/bar:environment:fee"
+   */
+  sub: string;
+  /**
+   * Environment the job is running in, if no environment will be empty
+   */
+  environment: string | null;
+  /**
+   * ID of the repo
+   */
+  repository_id: string;
+  /**
+   * ID of the org
+   */
+  repository_owner_id: string;
+};

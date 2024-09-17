@@ -34,9 +34,21 @@ export type CircleOIDCPlatform = OIDCPlatform<
   }
 >;
 
+export type GitHubActionsOIDCPlatform = OIDCPlatform<
+  'github',
+  {
+    organizationId: string;
+  },
+  {
+    repositoryIds: string[];
+    environments: string[];
+  }
+>;
+
 export type InvalidOIDCPlatform = OIDCPlatform<'invalid', object, object>;
 
 export type OIDCSecretExchangeConfig = (
   | OIDCSecretExchangeConfigItem<CircleOIDCPlatform>
+  | OIDCSecretExchangeConfigItem<GitHubActionsOIDCPlatform>
   | OIDCSecretExchangeConfigItem<InvalidOIDCPlatform>
 )[];

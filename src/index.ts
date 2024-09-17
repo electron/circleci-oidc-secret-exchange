@@ -52,6 +52,15 @@ export const configureAndListen = async (
           );
           break;
         }
+        case 'github': {
+          filteredSecretProviders = await getProvidersForConfig(
+            req.log,
+            configuration,
+            perPlatformHandlers.github,
+            token,
+          );
+          break;
+        }
         case 'invalid': {
           filteredSecretProviders = await getProvidersForConfig(
             req.log,

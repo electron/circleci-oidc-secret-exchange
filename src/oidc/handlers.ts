@@ -1,12 +1,13 @@
 import { FastifyBaseLogger } from 'fastify';
 import {
   CircleOIDCPlatform,
+  GitHubActionsOIDCPlatform,
   InvalidOIDCPlatform,
   OIDCSecretExchangeConfig,
   OIDCSecretExchangeConfigItem,
   OIDCSecretExchangeConfiguration,
 } from '../config';
-import { BaseClaims, CircleCIOIDCClaims } from '../type';
+import { BaseClaims, CircleCIOIDCClaims, GitHubActionsOIDCClaims } from '../type';
 import { getValidatedToken } from './validate-token';
 
 export type SubjectedSecretProvider = {
@@ -19,7 +20,7 @@ export type PlatformHandler<
   TClaims extends BaseClaims,
 > = {
   discoveryUrlForToken: (config: TConfig, token: string) => string | null;
-  validateToken: (token: string, discoveryUrl: string) => Promise<TClaims | null>;
+  validateToken: (config: TConfig, token: string, discoveryUrl: string) => Promise<TClaims | null>;
   filterSecretProviders: (config: TConfig, claims: TClaims) => Promise<SubjectedSecretProvider>;
 };
 
@@ -27,11 +28,11 @@ const circleci: PlatformHandler<
   OIDCSecretExchangeConfigItem<CircleOIDCPlatform>,
   CircleCIOIDCClaims
 > = {
-  discoveryUrlForToken: (config, token) => {
+  discoveryUrlForToken: (config) => {
     // TODO: Pre-validate the token to claim this audience
     return `https://oidc.circleci.com/org/${config.organizationId}`;
   },
-  validateToken: async (token, discoveryUrl) => {
+  validateToken: async (_, token, discoveryUrl) => {
     return await getValidatedToken(token, discoveryUrl);
   },
   filterSecretProviders: async (config, claims) => {
@@ -63,6 +64,53 @@ const circleci: PlatformHandler<
   },
 };
 
+const github: PlatformHandler<
+  OIDCSecretExchangeConfigItem<GitHubActionsOIDCPlatform>,
+  GitHubActionsOIDCClaims
+> = {
+  discoveryUrlForToken: () => {
+    return 'https://token.actions.githubusercontent.com';
+  },
+  validateToken: async (config, token, discoveryUrl) => {
+    const validated = await getValidatedToken<GitHubActionsOIDCClaims>(token, discoveryUrl);
+    if (validated) {
+      // If the token was validated but the owner doesn't match the org ID, the token is invalid
+      if (
+        !validated.repository_owner_id ||
+        validated.repository_owner_id !== config.organizationId
+      ) {
+        return null;
+      }
+    }
+    return validated;
+  },
+  filterSecretProviders: async (config, claims) => {
+    const validatedEnvironment = claims.environment;
+    const repoId = claims.repository_id;
+    const ownerId = claims.repository_owner_id;
+    if (config.organizationId !== ownerId) return { subject: claims.sub, providers: [] };
+
+    const filteredSecretProviders = config.secrets
+      .filter((provider) => {
+        if (!provider.filters.repositoryIds.includes(repoId)) return false;
+        // If the wildcard environment is allowed then we don't need to check the environment filter
+        if (!provider.filters.environments.includes('*')) {
+          // If the environment is missing from the claim, don't validate it in case consumers accidentally put
+          // 'undefined' in the environments array
+          if (
+            !validatedEnvironment ||
+            !provider.filters.environments.includes(validatedEnvironment)
+          )
+            return false;
+        }
+        return true;
+      })
+      .map((p) => p.provider);
+
+    return { subject: claims.sub, providers: filteredSecretProviders };
+  },
+};
+
 const invalid: PlatformHandler<OIDCSecretExchangeConfigItem<InvalidOIDCPlatform>, BaseClaims> = {
   discoveryUrlForToken: () => {
     return null;
@@ -77,6 +125,7 @@ const invalid: PlatformHandler<OIDCSecretExchangeConfigItem<InvalidOIDCPlatform>
 
 export const perPlatformHandlers = {
   circleci,
+  github,
   invalid,
 };
 
@@ -93,7 +142,7 @@ export const getProvidersForConfig = async <
   const discoveryUrl = handler.discoveryUrlForToken(config, token);
   if (!discoveryUrl) return null;
 
-  const claims = await handler.validateToken(token, discoveryUrl);
+  const claims = await handler.validateToken(config, token, discoveryUrl);
   if (!claims) return null;
 
   logger.info(`Validated incoming OIDC token from: ${claims.sub}`);
