@@ -2,7 +2,7 @@
 
 > Provides dynamic access to secrets in exchange for a valid OIDC token
 
-[![CircleCI](https://circleci.com/gh/electron/circleci-oidc-secret-exchange.svg?style=shield)](https://circleci.com/gh/electron/circleci-oidc-secret-exchange)
+[![Test](https://github.com/electron/circleci-oidc-secret-exchange/actions/workflows/test.yml/badge.svg)](https://github.com/electron/circleci-oidc-secret-exchange/actions/workflows/test.yml)
 [![NPM package](https://img.shields.io/npm/v/@electron/circleci-oidc-secret-exchange)](https://npm.im/@electron/circleci-oidc-secret-exchange)
 
 ## Usage
